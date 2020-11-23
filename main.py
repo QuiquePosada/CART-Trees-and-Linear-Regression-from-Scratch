@@ -19,12 +19,12 @@ from sklearn.model_selection import train_test_split # For splitting dataset dat
 from sklearn.metrics import accuracy_score, confusion_matrix, classification_report, mean_squared_error, r2_score
 import matplotlib.pyplot as plot
 import time
-import seaborn
+# import seaborn
 
-import operator # helps in obtaining minimum and maximum in a list of tuples
+# import operator # helps in obtaining minimum and maximum in a list of tuples
 
 # Classification libraries
-from sklearn.linear_model import LogisticRegression
+# from sklearn.linear_model import LogisticRegression
 from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor
 from sklearn import tree
 
@@ -32,225 +32,9 @@ from sklearn import tree
 from sklearn.linear_model import LinearRegression
 
 # Global variables
-# totalErrorLogisticRegression = []
 totalErrorLinearRegression = []
 
-# ------------------------- Random Forest Classifier Functions 
-# Better to have many trees to guarantee it works than one tree that "does" it all 
-    # The reason for this wonderful effect is that the trees protect each other from their individual errors 
-    # (as long as they don’t constantly all err in the same direction). 
-    # While some trees may be wrong, many other trees will be right
-
-# Bagging (Bootstrap Aggregation) — Decisions trees are very sensitive to the data they are trained on 
-# — small changes to the training set can result in significantly different tree structures. 
-    # Random forest takes advantage of this by allowing each individual tree to randomly sample from the dataset with replacement, 
-    # resulting in different trees. 
-    # This process is known as bagging.
-
-# NOTE: The random forest is a classification algorithm consisting of many decisions trees. 
-    # It uses bagging and feature randomness when building each individual tree to try to create an uncorrelated forest of trees 
-    # whose prediction by committee is more accurate than that of any individual tree
-
-# REFS
-# https://www.python-course.eu/Decision_Trees.php
-# 
-
-# --------- Decision Tree Class
-
-class Node:
-    pass
-
-class Leaf:
-    pass
-
-    # Made since it better organizes the tree itself, and it makes it reusable
-class DecisionTree:
-    def __init__(self,type,max_depth=None):
-        """
-            Creates a CART (Classification and Regression Tree) decision tree
-            This implementation uses MSE as the cost/impurity function for regression and Entropy for classification
-            type        -> "classification" or "regression"
-            max_depth   -> level of max depth a tree can reach
-        """
-        self.type = type
-    
-    def getMSE(self, y, mean):
-        """
-            Calculates the MSE (Mean Square Error) of the data given
-            This is the impurity function used for regression trees
-
-        """
-        # print("\nMY Y\n",mean)
-        if len(y) == 0: # Done in order to avoid obtaining nan values if there are no elements contained in y
-            return 0
-        mse = numpy.average((y-mean)**2)
-        # print("mse\t",mse)
-        return mse
-
-    # Entropy/Gini are the Cost Functions for Decision Trees (Classification)
-    def getEntropy(self, data):
-        """
-            Calculates the Entropy for a given labeled Data
-            This is the impurity function for classification trees
-
-            data    -> Data provided for labels
-                It is used to obtain unique elements the make up a class and applies the Shannon's entropy formula
-
-            Formula is as follows
-            np.sum([(-counts[i]/np.sum(counts))*np.log2(counts[i]/np.sum(counts)) for i in range(len(elements))])
-        """
-        _, elementsCounted = numpy.unique(data, return_counts = True) # Obtains data only for the indices provided using loc
-        totalElements = numpy.sum(elementsCounted)
-        acc = (elementsCounted/totalElements) * numpy.log2(elementsCounted/totalElements) # numpy makes this type of operation faster without the need of a for loop    
-        acc = - numpy.sum(acc) # axis=0 for rows
-        # USED After a a new split is made
-        return acc
-
-    def informationGain(self, systemEntropy, label, leftPartitionIndices, rightPartitionIndices):
-        """
-            Measures the quality of a split
-            Acts as a reduction in noise
-
-            systemEntropy           -> The entropy of the current Node in tree
-            label                   -> The class values of the whole training dataset
-            leftPartitionIndices    -> The obtained left indices obtained from the split
-            rightPartitionIndices   -> The obtained right indices obtained from the split
-        """
-
-        leftLabels = label.loc[leftPartitionIndices]
-        rightLabels = label.loc[rightPartitionIndices]
-        # info gain 
-        # fi = Frequency of label at left branch
-        leftFi = len(leftPartitionIndices) / (len(leftPartitionIndices) + len(rightPartitionIndices))
-            # Calculate the entropy for the quality of the Split
-        entropy = (leftFi * getEntropy(leftLabels)) + ((1 - leftFi) * getEntropy(rightLabels))
-        # impurity = (leftFi * getEntropy(leftLabels)) + ((1 - leftFi) * getEntropy(rightLabels)))
-        infoGain = systemEntropy - (entropy)
-        # infoGain = systemEntropy - (impurity)
-
-        joinedElementIndices = leftPartitionIndices.union(rightPartitionIndices)
-        joinedElements = numpy.unique(label.loc[joinedElementIndices], return_counts = True)
-        # print("GREAT\t", joinedElements)
-        # print("TOTAL ", len(leftPartitionIndices)+len(rightPartitionIndices))
-        return infoGain, joinedElements
-
-    def splitData(self, data, column, value):
-        """
-            Splits the data given into left and right branches by comparing data greater than a given value and data less than given value
-            Update, obtains only indices in order to be faster
-
-            data    -> Dataset
-            column  -> Current feature being evaluated
-            value   -> Value provided to evaluate the dataset and return the indices of those
-        """
-        left = data[data[column] <= value]
-        right = data[data[column] > value]
-        return left.index,right.index
-
-    def findBestSplit(self, data, label, type):
-        """
-            Calculates and gets the Best Split for the tree
-            returns a dictionary containing the best split found
-
-            data    -> The data from which it should find the best split
-            label   -> The class values for given data
-            type    -> "regression" or "classification"
-        """
-        # variables containing information 
-        bestSplit = {}
-
-        # Check for the best feature to make the split
-        if self.type == "classification":
-            systemEntropy = getEntropy(label) # Calculate the entropy for the system
-            bestSplit = { "bestValue": None, "bestFeature": None, "entropy": systemEntropy, "bestInformationGain": 0, "bestClassValues":None, "bestLeftChildren": None, "bestRightChildren": None }
-            
-            # Original Implementation
-            for feature in data:
-                # print("Current Feature: ",feature)
-                elements, _ = numpy.unique(data[feature], return_counts = True)
-                # print("Unique elements\t",elements)
-                # print(elementsCounted)
-                for value in elements:
-                    leftPartitionIndices, rightPartitionIndices = splitData(data, feature, value) # Just like the Yes/No Excel Worksheet
-                    infoGain, classValues = informationGain(systemEntropy, label, leftPartitionIndices, rightPartitionIndices)
-                    if infoGain > bestSplit["bestInformationGain"]:
-                        print("BestGain\t"+str(infoGain),end="\r")
-                        bestSplit["bestFeature"] = feature
-                        bestSplit["bestValue"] = value
-                        bestSplit["bestInformationGain"] = infoGain
-                        bestSplit["bestClassValues"] = classValues
-                        # This saves the two branches made
-                        bestSplit["bestLeftChildren"] = leftPartitionIndices
-                        bestSplit["bestRightChildren"] = rightPartitionIndices
-        else:
-            bestSplit = { "bestFeature": None, "mse": 0, "value":0, "bestMSE": float('inf'), "bestLeftChildren": None, "bestRightChildren": None }
-
-            bestSplit["value"] = numpy.average(label)
-
-            for feature in data:
-                elements, _ = numpy.unique(data[feature], return_counts = True)
-                # print("CURRENT FEATURE\t",feature)
-                for val in elements:
-                    leftPartitionIndices, rightPartitionIndices = splitData(data, feature, val) # Just like the Yes/No Excel Worksheet
-                    mseLeftRight = getMSE(label.loc[leftPartitionIndices.union(rightPartitionIndices)],numpy.average(label))
-                    leftMean = numpy.average(label.loc[leftPartitionIndices]) if len(leftPartitionIndices) > 0 else 0
-                    rightMean = numpy.average(label.loc[rightPartitionIndices]) if len(rightPartitionIndices) > 0 else 0
-
-                    leftFi = len(leftPartitionIndices) / (len(leftPartitionIndices) + len(rightPartitionIndices))
-
-                    # Calculate the quality of the Split
-                    branchesMSE = (leftFi * getMSE(label.loc[leftPartitionIndices],leftMean)) + ((1 - leftFi) * getMSE(label.loc[rightPartitionIndices],rightMean))
-                    # Condition for establishing the best split (the one with least MSE)
-                    if branchesMSE < bestSplit["bestMSE"]:
-                        print("BEST MSE\t"+str(branchesMSE.round(5))+" and Label Value "+str(bestSplit["value"]), end="\r")
-                        # print("Feature best\t",feature)
-                        bestSplit["bestFeature"] = feature
-                        bestSplit["bestValue"] = val
-                        # bestSplit["value"] = numpy.average(label)
-                        # bestSplit["bestMSE"] = branchesMSE
-                        bestSplit["mse"] = mseLeftRight 
-                        bestSplit["bestMSE"] = branchesMSE
-                        # bestSplit["bestClassValues"] = classValues
-                        # This saves the two branches made
-                        bestSplit["bestLeftChildren"] = leftPartitionIndices
-                        bestSplit["bestRightChildren"] = rightPartitionIndices
-        return bestSplit
-
-    
-    def buildDecisionTree(self, features, labels):
-        return 1
-
-class RandomForest():
-    def __init__(self,treeType, numTrees):
-        if treeType != "classification" or treeType !="regression":
-            print("Error. Tree type must be 'classification' or 'regression'")
-            exit()
-        self.type = treeType
-        self.numTrees = numTrees
-        self.trees = list()
-    
-    def trainModel(self,samples,labels):
-        nRows = samples.shape[0] # Use all rows
-        # nRows = givenMaxSampleSize...
-        nFeatures = int(numpy.sqrt(samples.shape[1])) # Truncates float and converts it to an integer
-        # trees = list()
-        for _ in range(self.numTrees):
-            # SciKit considers the number of features to choose to be the Square Root of the column features
-            sample = samples.sample(n=nRows,replace=True).sample(n=nFeatures,replace=False,axis=1)
-            # print("sample\n",sample)
-            # print("Y\n",y.loc[sample.index])
-
-            # tree = 
-
-            # rf = randomForest(regressionTrainingFeatures,regressionTrainingLabel,2,"regression")
-            # myTree = tree.DecisionTreeRegressor(criterion="mse")
-            # myTree.fit(sample,y.loc[sample.index])
-            # myTree = decisionTree(sample,y.loc[sample.index],type)
-            self.trees.append(1)
-    
-    def predict(self,samples):
-        return
-    
+# --------- Decision Tree Functions
 
 def getMSE(y, mean):
     """
@@ -450,7 +234,7 @@ def buildDecisionTreeRegression(samples, y, max_depth, currentLevel=0):
 
 def checkPredictions(instance, tree):
     """
-
+        Traverses a given tree until a leaf is reached, returning the value to predict from a given instance
         instance    -> pandas tuple containing instance data
         tree        -> the decisionTree previously trained
     """
@@ -465,7 +249,6 @@ def checkPredictions(instance, tree):
         return checkPredictions(instance, tree["leftBranch"])
     else:
         return checkPredictions(instance, tree["rightBranch"])
-
     return 1
 
 def predict(samples, tree):
@@ -477,26 +260,19 @@ def predict(samples, tree):
         data    -> Test Data or data from which we simply want to predict
         tree    -> The tree created to make tests on Data
     """
-    # if 
-    # For now all this is not done in parallel
     # samples.apply(checkPredictions, axis=1,)
-
     predictions = list()
-
     for instance in range(len(samples)):
         pred = checkPredictions(samples.iloc[instance], tree)
         predictions.append(pred)
-    
-    print("predictions\t",predictions)
-
-
+    # print("predictions\t",predictions)
     # print("MY TREE\t",tree)
-    print("Done")
+    # print("Done")
     return predictions
 
 def decisionTree(samples, y, type, max_depth=None):
     """
-    
+        This is the starting point to creating a tree and training the model
         samples -> Training Features
         y       -> Training Labels
         type    -> "regression" or "classification" 
@@ -515,22 +291,30 @@ def decisionTree(samples, y, type, max_depth=None):
 # ---- end ----
 # ------------------------- Random Forest Implementation
 def baggingPredictions(samples, forest):
-    """
-         
+    """ 
+        Aggregates predictions and returns a list of the predicted values      
         samples -> The sample of test features/instamces to predict
         forest  -> The forest created and to be used to predict
     """
-    # predictions = numpy.array([])
     predictions = list()
     # Get all predictions in tree
     for tree in forest:
         predictions.append(predict(samples, tree))
-        # predictions = numpy.append(predictions, predict(samples, tree), axis=0)
     # Aggregate predictions
-    return predictions
+    predictions = numpy.array(predictions)
+    forestPredictions = list()
+    for row in predictions.T.tolist(): # transposes array and makes it a list so you have all predictions from each tree in a row
+        forestPredictions.append(max(set(row),key=row.count))
+    return forestPredictions
+    # return predictions
 
 def randomForest(samples, y, numTrees, type, max_depth=None):
     """
+        # This forest implementation uses bagging and feature randomness when building each individual tree to try to create a forest of trees 
+        (NOTE : The performance did not provide better results, therefore it was better to stick with a "smart" tree since it requires more trees than 10 to work )
+        
+        # In theory, it is better to have many trees to guarantee it works than one tree that "does" it all 
+        # While some trees may be wrong, many other trees will be right
 
         samples     -> Training Features (Pandas DataFrame)
         y           -> Training Labels (Pandas DataFrame))
