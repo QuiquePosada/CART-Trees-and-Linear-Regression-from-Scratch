@@ -7,8 +7,8 @@ Artificial Intelligence Project
 
 """
 The following project employs the use of machine learning techniques made both from scratch and with the use of the scikit framework 
-in order to compare and contrast the performance in predictions between a logistic regression and a random forest, and also makes use 
-of a linear regression and a k-means
+in order to compare and contrast the performance in predictions between a linear regression and a decision tree, and also uses a decision tree for classification
+As a side note, a random forest was also implemented yet the results of this are rather vague and therefore the decision tree is the "important" model for the project
 """
 
 # Import required libraries
